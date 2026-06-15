@@ -1,0 +1,17 @@
+{% extends 'tasks/base.html'%}
+{% block content %}
+    <h1>YourTasks</h1>
+        {% for task in tasks %}
+            <h3>{{task.title}}</h3>
+            <p>{{task.description}}</p>
+            {%if task.completed %}
+                <p>Completed</p>
+            {%else%}
+                <p>Pending</p>
+            {%endif%}
+        <hr>
+        {%empty%}
+        <p>No Tasks Available</p>
+        {%endfor%}
+    <a href="{% url 'task-create'%}"><button>ADD TASKS</button></a>
+{% endblock %}
