@@ -1,0 +1,11 @@
+{% extends 'tasks/base.html' %}
+{% block content %}
+<form method = "POST">
+{%csrf_token%}
+<label for = "name">ClanName</label><br>
+    <input type = "text" name = "name"> <br>
+<label for = "description">Description</label><br>
+    <textarea name = "description"></textarea><br>
+<button type = "submit"> save </button><br>
+</form>
+{% endblock %}

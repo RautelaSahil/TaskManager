@@ -1,17 +1,44 @@
 {% extends 'tasks/base.html'%}
+
 {% block content %}
-    <h1>YourTasks</h1>
-        {% for task in tasks %}
-            <h3>{{task.title}}</h3>
-            <p>{{task.description}}</p>
-            {%if task.completed %}
+<h1>Your Tasks</h1>
+
+<table style="width: 100%; border-collapse:collapse;" border = "1">
+    <tr>
+        <th>TaskNumber</th>
+        <th>TaskTitle</th>
+        <th>TaskDescription</th>
+        <th>Status</th>
+    </tr>
+    {% for task in tasks %}
+    <tr>
+        <td>
+            {{forloop.counter}}
+        </td>
+        <td>
+            {{ task.title }}
+        </td>
+        <td>
+            {{ task.description }}
+        </td>
+        <td>
+            {% if task.completed %}
                 <p>Completed</p>
-            {%else%}
+            {% else %}
                 <p>Pending</p>
-            {%endif%}
-        <hr>
-        {%empty%}
-        <p>No Tasks Available</p>
-        {%endfor%}
-    <a href="{% url 'task-create'%}"><button>ADD TASKS</button></a>
+            {% endif %}
+        </td>
+    </tr>
+    {% empty %}
+        <td>No Tasks Available</td>
+    {% endfor %}
+</table>
+
+<p>Total Tasks: {{ tasks|length }}</p>
+
+<a href="{% url 'task-create' %}">
+    <button>ADD TASK</button>
+</a>
+
+<a href="{% url 'logout' %}">Logout</a>
 {% endblock %}
