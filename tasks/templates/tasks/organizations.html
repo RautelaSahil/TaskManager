@@ -16,6 +16,9 @@
         <td>
             {{ organization.description }}
         </td>
+        <td>
+            <a href="{% url 'membership-list' organization.pk %}"> view</a>
+        </td>
     </tr>
     {% empty %}
         <td>No CLANS Available</td>

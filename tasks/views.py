@@ -1,5 +1,5 @@
 from django.forms.models import BaseModelForm
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect, render, get_object_or_404
 from .models import Task, Organization, Membership, OrganisationTask, AssignedTasks
 from django.views.generic import ListView, CreateView, TemplateView   
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
@@ -82,3 +82,33 @@ class OrganizationCreateView(LoginRequiredMixin,CreateView):
     def form_valid(self,form):
         return super().form_valid(form)
 
+#==========================================================================#
+#------------------------- MEMBERSHIP LOGIC -------------------------------#
+#==========================================================================#
+
+class MembershipListView(ListView):
+    model =Membership
+    template_name = 'tasks/clan_members.html'
+    context_object_name = 'memberships'
+    def get_queryset(self):
+        return Membership.objects.filter(
+            organization_id=self.kwargs['pk']
+        )
+    def get_context_data(self, **kwargs):
+        context =  super().get_context_data(**kwargs)
+        organization = get_object_or_404(Organization,pk = self.kwargs['pk'])
+        context['organization'] = organization
+        return context
+
+"""I was making form for joining a clan, 0the doubt i had was, how do i make sure of organization and user so they're saved with an accurate role"""
+
+class MemberJoinView(LoginRequiredMixin,CreateView):
+    model = Membership
+    template_name = 'tasks/clan_join.html'
+    fields = ['role']
+    def get_success_url(self) :
+        return reverse_lazy('membership-list',kwargs = {'pk':self.kwargs['pk']})
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        form.instance.organization_id = self.kwargs['pk']
+        return super().form_valid(form)

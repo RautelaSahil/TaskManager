@@ -10,4 +10,6 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('organizations/',views.OrganizationListView.as_view(),name = 'organizations'),
     path('organizations/create',views.OrganizationCreateView.as_view(),name = 'org-create'),
+    path('organizations/<int:pk>/members',views.MembershipListView.as_view(),name = 'membership-list'),
+    path('organizations/<int:pk>/join',views.MemberJoinView.as_view(),name = 'org-join')
 ]

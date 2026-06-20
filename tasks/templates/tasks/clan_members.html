@@ -1,0 +1,33 @@
+{% extends 'tasks/base.html'%}
+
+{% block content %}
+<h1>Browse - {{organization.name}}</h1>
+
+<table style="width: 100%; border-collapse:collapse;" border = "1">
+    <tr>
+        <th>CLANMember</th>
+        <th>ROLE</th>
+    </tr>
+    {% for member in memberships %}
+    <tr>
+        <td>
+            {{ member.user }}
+        </td>
+        <td>
+            {{ member.role }}
+        </td>
+        <td>
+        </td>
+    </tr>
+    {% empty %}
+        <td>No MEMEBER</td>
+    {% endfor %}
+
+</table>
+
+
+<a href="{% url 'org-join' organization.pk %}">
+    <button>+join+</button>
+</a>
+<a href="{% url 'logout' %}">Logout</a>
+{% endblock %}
