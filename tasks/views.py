@@ -1,7 +1,8 @@
+from django.db.models.query import QuerySet
 from django.forms.models import BaseModelForm
 from django.shortcuts import redirect, render, get_object_or_404
 from .models import Task, Organization, Membership, OrganisationTask, AssignedTasks
-from django.views.generic import ListView, CreateView, TemplateView   
+from django.views.generic import ListView, CreateView, TemplateView , UpdateView
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -12,8 +13,7 @@ from django.contrib.auth import login,logout
 #######################
 class HomeView(TemplateView):
     template_name = 'tasks/home.html'
-
-
+    
 ########+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++#########
 ########------------------ AUTHENTICATION -------------------------#########
 ########+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++#########
@@ -24,7 +24,7 @@ def register_view(request):
             user = form.save()
             login(request, user)
             return redirect('task-list')
-    else:                              # ← this else was missing
+    else:                              
         form = UserCreationForm()
     return render(request, 'tasks/register.html', {'form': form})
 
@@ -34,7 +34,7 @@ def login_view(request):
         if form.is_valid():
             user = form.get_user()
             login(request, user)
-            return redirect('task-list')
+            return redirect(request.META.get("HTTP_REFERER","/"))
     else:
         form = AuthenticationForm()
     return render(request, 'tasks/login.html', {'form': form})
@@ -63,6 +63,15 @@ class TaskCreateView(LoginRequiredMixin, CreateView):
         form.instance.user = self.request.user
         return super().form_valid(form)
 
+class TaskUpdateView(LoginRequiredMixin, UpdateView):
+    model = Task
+    template_name = 'tasks/task_update.html'
+    fields = ['title','description','completed']
+    success_url = reverse_lazy('task-list')
+    def form_valid(self,form):
+        form.instance.user = self.request.user
+        return super().form_valid(form)
+        
 #==========================================================================#
 #------------------------ ORGANIZATION LOGIC ------------------------------#
 #==========================================================================#
@@ -82,6 +91,15 @@ class OrganizationCreateView(LoginRequiredMixin,CreateView):
     def form_valid(self,form):
         return super().form_valid(form)
 
+class OrganizationUpdateView(LoginRequiredMixin,UpdateView):
+    model = Organization
+    template_name = 'tasks/Edit_Org.html'
+    fields = ['description']
+    success_url = reverse_lazy('organizations')
+    def get_queryset(self):
+        return Organization.objects.filter(
+            membership__user=self.request.user
+        )
 #==========================================================================#
 #------------------------- MEMBERSHIP LOGIC -------------------------------#
 #==========================================================================#
@@ -112,3 +130,5 @@ class MemberJoinView(LoginRequiredMixin,CreateView):
         form.instance.user = self.request.user
         form.instance.organization_id = self.kwargs['pk']
         return super().form_valid(form)
+
+"""I will render request for joining in the same page as clanMembers. The request would be a post request which would append on the clan page not to us. and then, I will click accept as a member, which would then allow user to be part of organization member. Essently, MY accept sign would appened him to my clan's database"""

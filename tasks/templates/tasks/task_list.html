@@ -28,6 +28,9 @@
                 <p>Pending</p>
             {% endif %}
         </td>
+        <td>
+            <a href="{% url 'task-edit' task.pk%} " >Update</a>
+        </td>
     </tr>
     {% empty %}
         <td>No Tasks Available</td>

@@ -29,5 +29,8 @@
 <a href="{% url 'org-join' organization.pk %}">
     <button>+join+</button>
 </a>
+<a href = "{%url 'org_edit' organization.pk%}">
+    <button>+|--{ Edit }--|+</button>
+</a>
 <a href="{% url 'logout' %}">Logout</a>
 {% endblock %}
