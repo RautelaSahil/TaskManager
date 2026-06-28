@@ -48,3 +48,9 @@ class AssignedTasks(models.Model):
 
     def __str__(self):
         return f"{self.task.title} assigned to {self.user.username} in {self.task.organization.name}"
+    
+class JoinRequest(models.Model):
+    user = models.ForeignKey(User,on_delete=models.CASCADE)
+    organization = models.ForeignKey(Organization,on_delete=models.CASCADE)
+    def __str__(self):
+        return self.user

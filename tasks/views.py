@@ -1,12 +1,14 @@
 from django.db.models.query import QuerySet
 from django.forms.models import BaseModelForm
 from django.shortcuts import redirect, render, get_object_or_404
-from .models import Task, Organization, Membership, OrganisationTask, AssignedTasks
+from .models import Task, Organization, Membership, OrganisationTask, AssignedTasks,JoinRequest
 from django.views.generic import ListView, CreateView, TemplateView , UpdateView
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login,logout
+from django.http import HttpResponseNotAllowed
 
 #######################   
 ### INDEX FOR VIEWS ###
@@ -103,6 +105,22 @@ class OrganizationUpdateView(LoginRequiredMixin,UpdateView):
 #==========================================================================#
 #------------------------- MEMBERSHIP LOGIC -------------------------------#
 #==========================================================================#
+@login_required()
+def membership_list(request,pk):
+    organization = get_object_or_404(Organization,pk = pk)
+    if request.method == "GET":
+        memberships = Membership.objects.filter(organization=organization)
+        requests = JoinRequest.objects.filter(organization=organization)
+        context = {"memberships":memberships,"organization": organization, "requests": requests}
+        return render(request,"tasks/clan_members.html",context)
+    elif request.method == "POST":
+        if not Membership.objects.filter(user = request.user, organization = organization).exists():
+            JoinRequest.objects.get_or_create(user = request.user,organization = organization)
+        return redirect("membership-list",pk = pk)
+    return HttpResponseNotAllowed(['GET','POST'])
+    
+
+
 
 class MembershipListView(ListView):
     model =Membership
