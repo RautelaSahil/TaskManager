@@ -22,13 +22,35 @@
     {% empty %}
         <td>No MEMEBER</td>
     {% endfor %}
-
 </table>
+<h2>JoinRequests</h2>
+{%if requests%}
+    <ul>
+    {% for request in requests %}
+    <li>
+        {{ request.user }}
 
+        <form method="post" action="{% url 'accept-request' request.pk %}">
+            {% csrf_token %}
+            <button type="submit" name="action" value="accept">
+                Accept
+            </button>
 
-<a href="{% url 'org-join' organization.pk %}">
+            <button type="submit" name="action" value="reject">
+                Reject
+            </button>
+        </form>
+    </li>
+{% endfor %}
+    </ul>
+{% else %}
+    <p>No join requests.</p>
+{% endif %}
+
+<form method = "POST">
+    {% csrf_token %}
     <button>+join+</button>
-</a>
+</form>
 <a href = "{%url 'org_edit' organization.pk%}">
     <button>+|--{ Edit }--|+</button>
 </a>

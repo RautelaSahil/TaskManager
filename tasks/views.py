@@ -36,7 +36,7 @@ def login_view(request):
         if form.is_valid():
             user = form.get_user()
             login(request, user)
-            return redirect(request.META.get("HTTP_REFERER","/"))
+            return redirect("/organizations/")
     else:
         form = AuthenticationForm()
     return render(request, 'tasks/login.html', {'form': form})
@@ -91,6 +91,8 @@ class OrganizationCreateView(LoginRequiredMixin,CreateView):
     fields = ['name','description']
     success_url = reverse_lazy('organizations')
     def form_valid(self,form):
+        form.instance.save()
+        Membership.objects.create(user = self.request.user,organization = form.instance,role = "leader")
         return super().form_valid(form)
 
 class OrganizationUpdateView(LoginRequiredMixin,UpdateView):
@@ -110,7 +112,11 @@ def membership_list(request,pk):
     organization = get_object_or_404(Organization,pk = pk)
     if request.method == "GET":
         memberships = Membership.objects.filter(organization=organization)
-        requests = JoinRequest.objects.filter(organization=organization)
+        is_member = memberships.filter(user=request.user).exists()
+        if is_member:
+            requests = JoinRequest.objects.filter(organization=organization)
+        else:
+            requests = JoinRequest.objects.none()
         context = {"memberships":memberships,"organization": organization, "requests": requests}
         return render(request,"tasks/clan_members.html",context)
     elif request.method == "POST":
@@ -119,34 +125,16 @@ def membership_list(request,pk):
         return redirect("membership-list",pk = pk)
     return HttpResponseNotAllowed(['GET','POST'])
     
-
-
-
-class MembershipListView(ListView):
-    model =Membership
-    template_name = 'tasks/clan_members.html'
-    context_object_name = 'memberships'
-    def get_queryset(self):
-        return Membership.objects.filter(
-            organization_id=self.kwargs['pk']
-        )
-    def get_context_data(self, **kwargs):
-        context =  super().get_context_data(**kwargs)
-        organization = get_object_or_404(Organization,pk = self.kwargs['pk'])
-        context['organization'] = organization
-        return context
-
-"""I was making form for joining a clan, 0the doubt i had was, how do i make sure of organization and user so they're saved with an accurate role"""
-
-class MemberJoinView(LoginRequiredMixin,CreateView):
-    model = Membership
-    template_name = 'tasks/clan_join.html'
-    fields = ['role']
-    def get_success_url(self) :
-        return reverse_lazy('membership-list',kwargs = {'pk':self.kwargs['pk']})
-    def form_valid(self, form):
-        form.instance.user = self.request.user
-        form.instance.organization_id = self.kwargs['pk']
-        return super().form_valid(form)
-
-"""I will render request for joining in the same page as clanMembers. The request would be a post request which would append on the clan page not to us. and then, I will click accept as a member, which would then allow user to be part of organization member. Essently, MY accept sign would appened him to my clan's database"""
+@login_required()
+def handle_join_request(request, pk):
+    join_request = get_object_or_404(JoinRequest, pk=pk)
+    organization = join_request.organization
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "accept":
+            Membership.objects.create(user=join_request.user, organization=organization, role="member")
+            join_request.delete()
+        elif action == "reject":
+            join_request.delete()
+        return redirect("membership-list", pk=organization.pk)
+    return HttpResponseNotAllowed(['POST'])
