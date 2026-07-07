@@ -41,11 +41,14 @@ class OrganisationTask(models.Model):
     def __str__(self):
         return self.title
 
-class AssignedTasks(models.Model):
+class OrganisationTaskRelationships(models.Model):
+    class types(models.TextChoices):
+        Assigned = 'assigned', 'Assigned'
+        Claimed = 'claimed', 'Claimed'
     task = models.ForeignKey(OrganisationTask, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     completed = models.BooleanField(default=False)
-
+    source = models.CharField(max_length=50, choices = types.choices)
     def __str__(self):
         return f"{self.task.title} assigned to {self.user.username} in {self.task.organization.name}"
     
@@ -53,4 +56,6 @@ class JoinRequest(models.Model):
     user = models.ForeignKey(User,on_delete=models.CASCADE)
     organization = models.ForeignKey(Organization,on_delete=models.CASCADE)
     def __str__(self):
-        return self.user
+        return f"{self.user.username} -> {self.organization.name}"
+    
+

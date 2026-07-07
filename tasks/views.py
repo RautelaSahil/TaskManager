@@ -1,14 +1,15 @@
 from django.db.models.query import QuerySet
 from django.forms.models import BaseModelForm
 from django.shortcuts import redirect, render, get_object_or_404
-from .models import Task, Organization, Membership, OrganisationTask, AssignedTasks,JoinRequest
+from django.tasks import task
+from .models import Task, Organization, Membership, OrganisationTask, OrganisationTaskRelationships,JoinRequest, User
 from django.views.generic import ListView, CreateView, TemplateView , UpdateView
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login,logout
-from django.http import HttpResponseNotAllowed
+from django.http import HttpResponseNotAllowed, HttpResponseForbidden
 
 #######################   
 ### INDEX FOR VIEWS ###
@@ -51,10 +52,22 @@ def logout_view(request):
 #################################################################################
 class TaskListView(LoginRequiredMixin, ListView):
     model = Task
-    template_name = 'tasks/task_list.html'
-    context_object_name = 'tasks'
+    template_name = "tasks/task_list.html"
+    context_object_name = "tasks"
+
     def get_queryset(self):
         return Task.objects.filter(user=self.request.user)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        context["organisation_tasks"] = (
+            OrganisationTaskRelationships.objects
+            .filter(user=self.request.user)
+            .select_related("task", "task__organization")
+        )
+
+        return context
 
 class TaskCreateView(LoginRequiredMixin, CreateView):
     model = Task
@@ -113,11 +126,15 @@ def membership_list(request,pk):
     if request.method == "GET":
         memberships = Membership.objects.filter(organization=organization)
         is_member = memberships.filter(user=request.user).exists()
+        tasks = OrganisationTask.objects.filter(organization=organization)
         if is_member:
             requests = JoinRequest.objects.filter(organization=organization)
         else:
             requests = JoinRequest.objects.none()
-        context = {"memberships":memberships,"organization": organization, "requests": requests}
+        claimed_tasks = set(OrganisationTaskRelationships.objects.filter(user=request.user, task__organization=organization, source=OrganisationTaskRelationships.types.Claimed).values_list('task_id', flat=True))
+        assigned_tasks = set(OrganisationTaskRelationships.objects.filter(task__organization=organization, source=OrganisationTaskRelationships.types.Assigned).values_list('task_id', flat=True))
+        
+        context = {"memberships":memberships,"organization": organization, "requests": requests, "tasks": tasks,"is_member": is_member, "claimed_tasks": claimed_tasks, "assigned_tasks": assigned_tasks}
         return render(request,"tasks/clan_members.html",context)
     elif request.method == "POST":
         if not Membership.objects.filter(user = request.user, organization = organization).exists():
@@ -132,9 +149,98 @@ def handle_join_request(request, pk):
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "accept":
-            Membership.objects.create(user=join_request.user, organization=organization, role="member")
+            Membership.objects.create(user=join_request.user, organization=organization, role=Membership.Roles.Member)
             join_request.delete()
         elif action == "reject":
             join_request.delete()
+        return redirect("membership-list", pk=organization.pk)
+    return HttpResponseNotAllowed(['POST'])
+
+@login_required
+def create_organization_task(request, pk):
+    organization = get_object_or_404(Organization, pk=pk)
+    if not Membership.objects.filter(user=request.user, organization=organization).exists():
+        return HttpResponseForbidden("You are not a member of this organization.")
+    # Is this task already assigned?
+    if OrganisationTaskRelationships.objects.filter(
+        task=task,
+        source=OrganisationTaskRelationships.types.Assigned,
+        ).exists():
+        return HttpResponseForbidden()
+    if request.method == "POST":
+        title = request.POST.get("title", "").strip()
+        description = request.POST.get("description", "").strip()
+        if title:
+            OrganisationTask.objects.create(
+                title=title,
+                description=description,
+                organization=organization,
+                created_by=request.user,
+            )
+            return redirect("membership-list", pk=organization.pk)
+        context = {
+            "organization": organization,
+            "error": "Title is required.",
+            "title": title,
+            "description": description,
+            "user": request.user,
+        }
+        return render(request, "tasks/Create_Org_Task.html", context)
+
+    context = {
+        "organization": organization,
+    }
+    return render(request, "tasks/Create_Org_Task.html", context)
+
+@login_required
+def create_assigned_task(request,pk):
+    organization = get_object_or_404(Organization, pk=pk)
+    if not Membership.objects.filter(user = request.user,organization = organization, role__in = [Membership.Roles.Leader, Membership.Roles.Co_leader]).exists():
+        return HttpResponseForbidden("You are not authorized to assign tasks in this organization.")
+    if request.method == "POST":
+        title = request.POST.get("title", "").strip()
+        description = request.POST.get("description", "").strip()
+        assigned_users = request.POST.getlist("assigned_users")
+        if title and assigned_users:
+            org_task = OrganisationTask.objects.create(
+                title = title, 
+                description = description,
+                organization = organization,
+                created_by = request.user
+            )
+            users = User.objects.filter(pk__in=assigned_users)
+            for user in users:
+                OrganisationTaskRelationships.objects.create(
+                    task=org_task,
+                    user=user,
+                    source=OrganisationTaskRelationships.types.Assigned
+                )
+            return redirect("membership-list", pk=organization.pk)
+        context = {
+            "organization": organization,
+            "error": "Title and at least one assigned user are required.",
+            "title": title,
+            "description": description,
+            "assigned_users": assigned_users,
+            "user": request.user,
+        }
+        return render(request, "tasks/Assign_Org_Task.html", context)
+    members = Membership.objects.filter(organization=organization, role__in=[Membership.Roles.Co_leader, Membership.Roles.Elder, Membership.Roles.Member])
+    context = {"organization": organization, "members": members}
+    return render(request, "tasks/Assign_Org_Task.html", context)
+
+@login_required()
+def claim_task(request, pk):
+    task = get_object_or_404(OrganisationTask, pk=pk)
+    organization = task.organization
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "accept":
+            OrganisationTaskRelationships.objects.get_or_create(
+                task=task,
+                user=request.user,
+                source=OrganisationTaskRelationships.types.Claimed
+            )
+            return redirect("task-list")
         return redirect("membership-list", pk=organization.pk)
     return HttpResponseNotAllowed(['POST'])

@@ -14,4 +14,7 @@ urlpatterns = [
     path('organizations/<int:pk>/members',views.membership_list,name = 'membership-list'),
     path('organizations/<int:pk>/edit', views.OrganizationUpdateView.as_view(), name='org_edit'),
     path('join-request/<int:pk>/', views.handle_join_request, name='accept-request'),
+    path('organizations/<int:pk>/tasks/', views.create_organization_task, name='create_org_task'),
+    path('organizations/<int:pk>/tasks/assign/', views.create_assigned_task, name='assign_task'),
+    path('tasks/<int:pk>/claim/', views.claim_task, name='claim_task'),
 ]

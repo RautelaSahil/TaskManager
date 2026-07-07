@@ -3,45 +3,79 @@
 {% block content %}
 <h1>Your Tasks</h1>
 
-<table style="width: 100%; border-collapse:collapse;" border = "1">
+<h2>Personal Tasks</h2>
+
+<table style="width:100%; border-collapse:collapse;" border="1">
     <tr>
-        <th>TaskNumber</th>
-        <th>TaskTitle</th>
-        <th>TaskDescription</th>
+        <th>#</th>
+        <th>Title</th>
+        <th>Description</th>
         <th>Status</th>
+        <th></th>
     </tr>
+
     {% for task in tasks %}
     <tr>
-        <td>
-            {{forloop.counter}}
-        </td>
-        <td>
-            {{ task.title }}
-        </td>
-        <td>
-            {{ task.description }}
-        </td>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ task.title }}</td>
+        <td>{{ task.description }}</td>
         <td>
             {% if task.completed %}
-                <p>Completed</p>
+                Completed
             {% else %}
-                <p>Pending</p>
+                Pending
             {% endif %}
         </td>
         <td>
-            <a href="{% url 'task-edit' task.pk%} " >Update</a>
+            <a href="{% url 'task-edit' task.pk %}">Update</a>
         </td>
     </tr>
     {% empty %}
-        <td>No Tasks Available</td>
+    <tr>
+        <td colspan="5">No personal tasks.</td>
+    </tr>
     {% endfor %}
 </table>
 
-<p>Total Tasks: {{ tasks|length }}</p>
+<h2>Organisation Tasks</h2>
+
+<table style="width:100%; border-collapse:collapse;" border="1">
+    <tr>
+        <th>#</th>
+        <th>Title</th>
+        <th>Organization</th>
+        <th>Type</th>
+        <th>Status</th>
+    </tr>
+
+    {% for relationship in organisation_tasks %}
+    <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ relationship.task.title }}</td>
+        <td>{{ relationship.task.organization.name }}</td>
+        <td>{{ relationship.get_source_display }}</td>
+        <td>
+            {% if relationship.completed %}
+                Completed
+            {% else %}
+                Pending
+            {% endif %}
+        </td>
+    </tr>
+    {% empty %}
+    <tr>
+        <td colspan="5">No organisation tasks.</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<p>Personal Tasks: {{ tasks|length }}</p>
+<p>Organisation Tasks: {{ organisation_tasks|length }}</p>
 
 <a href="{% url 'task-create' %}">
-    <button>ADD TASK</button>
+    <button>ADD PERSONAL TASK</button>
 </a>
 
 <a href="{% url 'logout' %}">Logout</a>
+
 {% endblock %}

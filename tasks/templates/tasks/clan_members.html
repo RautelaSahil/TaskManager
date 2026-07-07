@@ -55,4 +55,57 @@
     <button>+|--{ Edit }--|+</button>
 </a>
 <a href="{% url 'logout' %}">Logout</a>
+
+<br>
+
+{% if tasks %}
+    <h2>Tasks</h2>
+
+    <ul>
+    {% for task in tasks %}
+        <li>
+            <strong>{{ task.title }}</strong> -
+            Created by: {{ task.created_by }}
+            <br>
+
+            {{ task.description }}
+            <br>
+
+            {% for relationship in task.organisationtaskrelationships_set.all %}
+                {% if relationship.source == relationship.types.Assigned %}
+                    <p>Assigned to: {{ relationship.user.username }}</p>
+                {% else %}
+                    <p>Claimed by: {{ relationship.user.username }}</p>
+                {% endif %}
+            {% endfor %}
+
+            {% if is_member %}
+                {% if task.pk not in assigned_tasks %}
+                    {% if task.pk not in claimed_tasks %}
+                        <form method="POST" action="{% url 'claim_task' task.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" name="action" value="accept">
+                                Claim
+                            </button>
+                        </form>
+                    {% else %}
+                        <p><strong>You have already claimed this task.</strong></p>
+                    {% endif %}
+                {% endif %}
+            {% endif %}
+
+            <hr>
+        </li>
+    {% endfor %}
+    </ul>
+
+{% else %}
+    <p>No tasks available.</p>
+{% endif %}
+<a href="{% url 'create_org_task' organization.pk %}">
+    <button>+|--{ Create Task }--|+</button>
+</a>
+<a href="{% url 'assign_task' organization.pk %}">
+    <button>+|--{ Assign Task }--|+</button>
+</a>
 {% endblock %}

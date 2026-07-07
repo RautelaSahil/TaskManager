@@ -1,0 +1,39 @@
+{% extends "tasks/base.html"%}
+{% block content %}
+
+<form method="post">
+    {% csrf_token %}
+
+    <input
+        type="text"
+        name="title"
+        value="{{ title|default:'' }}"
+        placeholder="Title"
+        required
+    >
+
+    <textarea name="description">{{ description|default:'' }}</textarea>
+
+    <h3>Assign to:</h3>
+
+    {% for membership in members %}
+        <label>
+            <input
+                type="checkbox"
+                name="assigned_users"
+                value="{{ membership.user.id }}"
+                {% if membership.user.id|stringformat:"s" in assigned_users %}checked{% endif %}
+            >
+            {{ membership.user.username }}
+        </label>
+        <br>
+    {% endfor %}
+
+    {% if error %}
+        <p>{{ error }}</p>
+    {% endif %}
+
+    <button type="submit">Assign Task</button>
+</form>
+
+{% endblock %}
