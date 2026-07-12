@@ -1,4 +1,5 @@
 from django.db.models.query import QuerySet
+from django.db import transaction
 from django.forms.models import BaseModelForm
 from django.shortcuts import redirect, render, get_object_or_404
 from django.tasks import task
@@ -244,3 +245,35 @@ def claim_task(request, pk):
             return redirect("task-list")
         return redirect("membership-list", pk=organization.pk)
     return HttpResponseNotAllowed(['POST'])
+
+def promote_member(request,org_pk,member_pk):
+    organization = get_object_or_404(Organization,pk = org_pk)
+    MemberPoints: dict[str,int] = {
+        Membership.Roles.Member: 1, 
+        Membership.Roles.Elder: 2, 
+        Membership.Roles.Co_leader: 3, 
+        Membership.Roles.Leader: 4
+    } 
+    if request.method == "POST":
+        member = get_object_or_404(Membership, pk=member_pk, organization=organization)
+        actor = get_object_or_404(Membership, user=request.user, organization=organization)
+        if MemberPoints[actor.role]<= MemberPoints[member.role]:
+            return HttpResponseForbidden("You cannot promote this member")
+        if actor.role not in (Membership.Roles.Leader,Membership.Roles.Co_leader):
+            return HttpResponseForbidden("You cannot promote")
+        if MemberPoints[actor.role] > MemberPoints[member.role]:
+            if member.role == Membership.Roles.Member:
+                member.role = Membership.Roles.Elder
+                member.save()
+            elif member.role == Membership.Roles.Elder:
+                member.role = Membership.Roles.Co_leader
+                member.save()
+            elif member.role == Membership.Roles.Co_leader:
+                with transaction.atomic():
+                    temp = member.role 
+                    member.role = actor.role
+                    actor.role = temp
+                    member.save()
+                    actor.save()
+        return redirect('membership-list',pk = org_pk)
+    return HttpResponseNotAllowed(["POST"])

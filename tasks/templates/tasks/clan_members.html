@@ -17,6 +17,10 @@
             {{ member.role }}
         </td>
         <td>
+            <form method="post" action="{% url 'promote_members' organization.pk member.pk %}">
+                {% csrf_token %}
+                <button type="submit">Promote</button>
+            </form>
         </td>
     </tr>
     {% empty %}

@@ -17,4 +17,5 @@ urlpatterns = [
     path('organizations/<int:pk>/tasks/', views.create_organization_task, name='create_org_task'),
     path('organizations/<int:pk>/tasks/assign/', views.create_assigned_task, name='assign_task'),
     path('tasks/<int:pk>/claim/', views.claim_task, name='claim_task'),
+    path('organizations/<int:org_pk>/promote/<int:member_pk>', views.promote_member,name = "promote_members")
 ]
