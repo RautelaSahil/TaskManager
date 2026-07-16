@@ -58,4 +58,39 @@ class JoinRequest(models.Model):
     def __str__(self):
         return f"{self.user.username} -> {self.organization.name}"
     
+class OrganisationActivityLog(models.Model):
+    class Actions(models.TextChoices):
+        PROMOTE = "promote", "Promote"
+        DEMOTE = "demote", "Demote"
+        JOIN = "join", "Join"
+        CREATE_TASK = "createTask", "Create Task"
+        DELETE_TASK = "deleteTask", "Delete Task"
+        CLAIM_TASK = "claimTask", "Claim Task"
+        TASKASSIGNED = "taskAssigned","taskAssigned"
+        CREATED = "created", "Created"
+        UPDATED = "updated","Updated"
+        
+    organization = models.ForeignKey(Organization,on_delete = models.CASCADE)
+    task = models.ForeignKey(OrganisationTask,on_delete=models.SET_NULL,null = True, blank=True)
+    actor = models.ForeignKey(User,on_delete=models.SET_NULL, null = True, blank=True, related_name="performed_activities")
+    activity = models.CharField(max_length = 20, choices = Actions.choices)
+    target_user = models.ForeignKey(User, on_delete = models.SET_NULL, blank=True, null = True, related_name="recieved_activities")
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["-created_at"]
+    def __str__(self):
+        return f"{self.actor} - {self.activity}"
 
+class TaskActivityLog(models.Model):
+    class Events(models.TextChoices):
+        CREATED = "created", "Created"
+        SUBMIT = "sumbit", "Submit"
+        COMPLETED = "completed", "Completed"
+    task = models.ForeignKey(OrganisationTask, on_delete = models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null = True, blank=True)
+    log = models.CharField(max_length = 10,choices = Events.choices)
+    time = models.DateTimeField(auto_now_add=True)
+    class Meta: 
+        ordering = ["-time"]
+    def __str__(self):
+        return f"{self.user} - {self.log}"

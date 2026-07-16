@@ -112,4 +112,21 @@
 <a href="{% url 'assign_task' organization.pk %}">
     <button>+|--{ Assign Task }--|+</button>
 </a>
+
+<h2>Recent Activity</h2>
+
+{% if activity_logs %}
+    <ul>
+    {% for log in activity_logs %}
+        <li>
+            {{ log.message }}
+            <br>
+            <small>{{ log.time }}</small>
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No activity yet.</p>
+{% endif %}
+
 {% endblock %}

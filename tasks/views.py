@@ -3,14 +3,58 @@ from django.db import transaction
 from django.forms.models import BaseModelForm
 from django.shortcuts import redirect, render, get_object_or_404
 from django.tasks import task
-from .models import Task, Organization, Membership, OrganisationTask, OrganisationTaskRelationships,JoinRequest, User
+from .models import Task, Organization, Membership, OrganisationTask, OrganisationTaskRelationships,JoinRequest, User, OrganisationActivityLog
 from django.views.generic import ListView, CreateView, TemplateView , UpdateView
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login,logout
-from django.http import HttpResponseNotAllowed, HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseNotAllowed, HttpResponseForbidden
+
+ACTIVITY_RENDERERS = {
+    OrganisationActivityLog.Actions.CREATED:
+        lambda l: f"{l.actor.username} created the organization.",
+
+    OrganisationActivityLog.Actions.CREATE_TASK:
+        lambda l: f"{l.actor.username} created '{l.task.title}'.",
+
+    OrganisationActivityLog.Actions.CLAIM_TASK:
+        lambda l: f"{l.actor.username} claimed '{l.task.title}'.",
+
+    OrganisationActivityLog.Actions.JOIN:
+        lambda l: f"{l.target_user.username} joined the organization.",
+
+    OrganisationActivityLog.Actions.PROMOTE:
+        lambda l: f"{l.actor.username} promoted {l.target_user.username}.",
+
+    OrganisationActivityLog.Actions.UPDATED:
+        lambda l: f"{l.actor.username} updated the organization.",
+}
+
+### HelperFunction ###
+def OrganizationActivity(organization,actor, activity, task =None,target_user = None ):
+    OrganisationActivityLog.objects.create(
+        organization = organization,
+        actor = actor,
+        activity = activity,
+        task = task,
+        target_user = target_user
+    )
+
+def get_organization_activity(organization):
+    return (
+        OrganisationActivityLog.objects
+        .filter(organization=organization)
+        .select_related("actor", "task", "target_user")
+        .order_by("-created_at")
+    )
+    
+def render_activity(log):
+    renderer = ACTIVITY_RENDERERS.get(log.activity)
+    if renderer is None:
+        return "Unknown activity."
+    return renderer(log)
 
 #######################   
 ### INDEX FOR VIEWS ###
@@ -99,15 +143,25 @@ class OrganizationListView(ListView):
     def get_queryset(self):
         return Organization.objects.all()
     
-class OrganizationCreateView(LoginRequiredMixin,CreateView):
+class OrganizationCreateView(LoginRequiredMixin, CreateView):
     model = Organization
     template_name = 'tasks/Create_Organizations.html'
-    fields = ['name','description']
+    fields = ['name', 'description']
     success_url = reverse_lazy('organizations')
-    def form_valid(self,form):
-        form.instance.save()
-        Membership.objects.create(user = self.request.user,organization = form.instance,role = "leader")
-        return super().form_valid(form)
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        Membership.objects.create(
+            user=self.request.user, 
+            organization=form.instance, 
+            role="leader"
+        )
+        OrganizationActivity(
+            organization=form.instance,
+            actor=self.request.user,
+            activity=OrganisationActivityLog.Actions.CREATED
+        )
+        return response
 
 class OrganizationUpdateView(LoginRequiredMixin,UpdateView):
     model = Organization
@@ -118,6 +172,14 @@ class OrganizationUpdateView(LoginRequiredMixin,UpdateView):
         return Organization.objects.filter(
             membership__user=self.request.user
         )
+    def form_valid(self, form: BaseModelForm) -> HttpResponse:
+        response =  super().form_valid(form)
+        OrganizationActivity(
+            organization=form. instance,
+            actor=self.request.user,
+            activity= OrganisationActivityLog.Actions.UPDATED
+        )
+        return response
 #==========================================================================#
 #------------------------- MEMBERSHIP LOGIC -------------------------------#
 #==========================================================================#
@@ -134,8 +196,15 @@ def membership_list(request,pk):
             requests = JoinRequest.objects.none()
         claimed_tasks = set(OrganisationTaskRelationships.objects.filter(user=request.user, task__organization=organization, source=OrganisationTaskRelationships.types.Claimed).values_list('task_id', flat=True))
         assigned_tasks = set(OrganisationTaskRelationships.objects.filter(task__organization=organization, source=OrganisationTaskRelationships.types.Assigned).values_list('task_id', flat=True))
-        
-        context = {"memberships":memberships,"organization": organization, "requests": requests, "tasks": tasks,"is_member": is_member, "claimed_tasks": claimed_tasks, "assigned_tasks": assigned_tasks}
+        logs = get_organization_activity(organization)
+        activty_logs = [
+            {
+                "message": render_activity(log),
+                "time": log.created_at
+            } 
+            for log in logs
+        ]
+        context = {"memberships":memberships,"organization": organization, "requests": requests, "tasks": tasks,"is_member": is_member, "claimed_tasks": claimed_tasks, "assigned_tasks": assigned_tasks, "activity_logs":activty_logs}
         return render(request,"tasks/clan_members.html",context)
     elif request.method == "POST":
         if not Membership.objects.filter(user = request.user, organization = organization).exists():
@@ -151,6 +220,12 @@ def handle_join_request(request, pk):
         action = request.POST.get("action")
         if action == "accept":
             Membership.objects.create(user=join_request.user, organization=organization, role=Membership.Roles.Member)
+            OrganizationActivity(
+                organization=organization,
+                activity= OrganisationActivityLog.Actions.JOIN,
+                actor= request.user,
+                target_user=join_request.user
+            )
             join_request.delete()
         elif action == "reject":
             join_request.delete()
@@ -162,21 +237,21 @@ def create_organization_task(request, pk):
     organization = get_object_or_404(Organization, pk=pk)
     if not Membership.objects.filter(user=request.user, organization=organization).exists():
         return HttpResponseForbidden("You are not a member of this organization.")
-    # Is this task already assigned?
-    if OrganisationTaskRelationships.objects.filter(
-        task=task,
-        source=OrganisationTaskRelationships.types.Assigned,
-        ).exists():
-        return HttpResponseForbidden()
     if request.method == "POST":
         title = request.POST.get("title", "").strip()
         description = request.POST.get("description", "").strip()
         if title:
-            OrganisationTask.objects.create(
+            newTask = OrganisationTask.objects.create(
                 title=title,
                 description=description,
                 organization=organization,
                 created_by=request.user,
+            ) 
+            OrganizationActivity(
+                organization=organization,
+                actor= request.user,
+                activity= OrganisationActivityLog.Actions.CREATE_TASK,
+                task= newTask
             )
             return redirect("membership-list", pk=organization.pk)
         context = {
@@ -216,6 +291,12 @@ def create_assigned_task(request,pk):
                     user=user,
                     source=OrganisationTaskRelationships.types.Assigned
                 )
+            OrganizationActivity(
+                organization=organization,
+                actor=request.user,
+                activity=OrganisationActivityLog.Actions.TASKASSIGNED,
+                task=org_task,
+            )
             return redirect("membership-list", pk=organization.pk)
         context = {
             "organization": organization,
@@ -241,6 +322,12 @@ def claim_task(request, pk):
                 task=task,
                 user=request.user,
                 source=OrganisationTaskRelationships.types.Claimed
+            )
+            OrganizationActivity(
+                organization=organization,
+                activity=OrganisationActivityLog.Actions.CLAIM_TASK,
+                task = task,
+                actor= request.user
             )
             return redirect("task-list")
         return redirect("membership-list", pk=organization.pk)
@@ -275,5 +362,12 @@ def promote_member(request,org_pk,member_pk):
                     actor.role = temp
                     member.save()
                     actor.save()
+            OrganizationActivity(
+                organization=organization,
+                actor=request.user,
+                activity= OrganisationActivityLog.Actions.PROMOTE,
+                target_user= member.user
+            )
         return redirect('membership-list',pk = org_pk)
     return HttpResponseNotAllowed(["POST"])
+
