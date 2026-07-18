@@ -44,22 +44,45 @@
         <th>#</th>
         <th>Title</th>
         <th>Organization</th>
-        <th>Type</th>
-        <th>Status</th>
+        <th>Assigned Users</th>
     </tr>
 
-    {% for relationship in organisation_tasks %}
+    {% for task in organisation_tasks %}
     <tr>
         <td>{{ forloop.counter }}</td>
-        <td>{{ relationship.task.title }}</td>
-        <td>{{ relationship.task.organization.name }}</td>
-        <td>{{ relationship.get_source_display }}</td>
+        <td>{{ task.title }}</td>
+        <td>{{ task.organization.name }}</td>
         <td>
+            {% for relationship in task.relationships.all %}
+            {{ relationship.user.username }}
+
             {% if relationship.completed %}
-                Completed
+                - Completed -
             {% else %}
-                Pending
+                - Pending -
             {% endif %}
+
+            ({{ relationship.get_source_display }})
+
+            {% if relationship.user == request.user %}
+                <form method="post"
+                    action="{% url 'relationship-toggle' relationship.pk %}"
+                    style="display:inline;">
+                    {% csrf_token %}
+
+                    <button type="submit">
+                        {% if relationship.completed %}
+                            Mark Pending
+                        {% else %}
+                            Mark Completed
+                        {% endif %}
+                    </button>
+                </form>
+            {% endif %}
+
+            <br>
+        {% endfor %}
+
         </td>
     </tr>
     {% empty %}

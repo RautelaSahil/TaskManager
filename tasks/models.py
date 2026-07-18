@@ -45,7 +45,7 @@ class OrganisationTaskRelationships(models.Model):
     class types(models.TextChoices):
         Assigned = 'assigned', 'Assigned'
         Claimed = 'claimed', 'Claimed'
-    task = models.ForeignKey(OrganisationTask, on_delete=models.CASCADE)
+    task = models.ForeignKey(OrganisationTask, on_delete=models.CASCADE, related_name="relationships")
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     completed = models.BooleanField(default=False)
     source = models.CharField(max_length=50, choices = types.choices)

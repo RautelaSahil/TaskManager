@@ -1,5 +1,6 @@
 from django.db.models.query import QuerySet
 from django.db import transaction
+from django.db.models import Prefetch
 from django.forms.models import BaseModelForm
 from django.shortcuts import redirect, render, get_object_or_404
 from django.tasks import task
@@ -27,6 +28,9 @@ ACTIVITY_RENDERERS = {
 
     OrganisationActivityLog.Actions.PROMOTE:
         lambda l: f"{l.actor.username} promoted {l.target_user.username}.",
+        
+    OrganisationActivityLog.Actions.DEMOTE:
+        lambda l: f"{l.actor.username} demote {l.target_user.username}.",
 
     OrganisationActivityLog.Actions.UPDATED:
         lambda l: f"{l.actor.username} updated the organization.",
@@ -93,7 +97,7 @@ def logout_view(request):
 
 
 #################################################################################
-########################## PERSONAL TASK LOGIC ##################################
+########################## TASK LOGIC ##################################
 #################################################################################
 class TaskListView(LoginRequiredMixin, ListView):
     model = Task
@@ -107,9 +111,14 @@ class TaskListView(LoginRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
 
         context["organisation_tasks"] = (
-            OrganisationTaskRelationships.objects
-            .filter(user=self.request.user)
-            .select_related("task", "task__organization")
+            OrganisationTask.objects
+            .filter(relationships__user=self.request.user)
+            .select_related("organization")
+            .prefetch_related(
+                Prefetch(
+                    "relationships",queryset=OrganisationTaskRelationships.objects.select_related("user")
+                )
+            ).distinct()
         )
 
         return context
@@ -132,6 +141,19 @@ class TaskUpdateView(LoginRequiredMixin, UpdateView):
         form.instance.user = self.request.user
         return super().form_valid(form)
         
+        
+@login_required
+def toggle_completion(request, pk):
+    relationship = get_object_or_404(
+        OrganisationTaskRelationships,
+        pk=pk,
+        user=request.user
+    )
+
+    relationship.completed = not relationship.completed
+    relationship.save()
+
+    return redirect("task-list")
 #==========================================================================#
 #------------------------ ORGANIZATION LOGIC ------------------------------#
 #==========================================================================#
@@ -366,6 +388,36 @@ def promote_member(request,org_pk,member_pk):
                 organization=organization,
                 actor=request.user,
                 activity= OrganisationActivityLog.Actions.PROMOTE,
+                target_user= member.user
+            )
+        return redirect('membership-list',pk = org_pk)
+    return HttpResponseNotAllowed(["POST"])
+
+def demote_member(request,org_pk,member_pk):
+    organization = get_object_or_404(Organization,pk = org_pk)
+    MemberPoints: dict[str,int] = {
+        Membership.Roles.Member: 1, 
+        Membership.Roles.Elder: 2, 
+        Membership.Roles.Co_leader: 3, 
+        Membership.Roles.Leader: 4
+    } 
+    if request.method == "POST":
+        member = get_object_or_404(Membership, pk=member_pk, organization=organization)
+        actor = get_object_or_404(Membership, user=request.user, organization=organization)
+        if MemberPoints[actor.role]<= MemberPoints[member.role]:
+            return HttpResponseForbidden("You cannot demote this member")
+        if actor.role not in (Membership.Roles.Leader,Membership.Roles.Co_leader):
+            return HttpResponseForbidden("You cannot demote")
+        if MemberPoints[actor.role] > MemberPoints[member.role]:
+            if member.role == Membership.Roles.Elder:
+                member.role = Membership.Roles.Member
+            elif member.role == Membership.Roles.Co_leader:
+                member.role = Membership.Roles.Elder
+            member.save()
+            OrganizationActivity(
+                organization=organization,
+                actor=request.user,
+                activity= OrganisationActivityLog.Actions.DEMOTE,
                 target_user= member.user
             )
         return redirect('membership-list',pk = org_pk)

@@ -22,6 +22,12 @@
                 <button type="submit">Promote</button>
             </form>
         </td>
+        <td>
+            <form method="post" action="{% url 'demote_members' organization.pk member.pk %}">
+                {% csrf_token %}
+                <button type="submit">Demote</button>
+            </form>
+        </td>
     </tr>
     {% empty %}
         <td>No MEMEBER</td>
